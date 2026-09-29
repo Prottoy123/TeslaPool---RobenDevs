@@ -1,13 +1,92 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  PASSENGER
+  DRIVER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum PoolStatus {
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum RideStatus {
+  WAITING
+  IN_POOL
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  fullName     String
+  email        String        @unique
+  phone        String
+  password     String
+  role         UserRole
+  status       UserStatus    @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  vehicle      Vehicle?
+  rideRequests RideRequest[]
+}
+
+model Vehicle {
+  id           String    @id @default(uuid())
+  driverId     String    @unique
+  driver       User      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  licensePlate String    @unique
+  capacity     Int       @default(3) // Tesla fixed capacity: 3
+  isOnline     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  pools        Pool[]
+}
+
+model Pool {
+  id             String        @id @default(uuid())
+  vehicleId      String
+  vehicle        Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  status         PoolStatus    @default(MATCHED)
+  availableSeats Int           @default(3)
+  currentZone    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  requests       RideRequest[]
+
+  @@index([status, currentZone])
+}
+
+model RideRequest {
+  id             String     @id @default(uuid())
+  passengerId    String
+  passenger      User       @relation(fields: [passengerId], references: [id], onDelete: Cascade)
+  poolId         String?
+  pool           Pool?      @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  pickupZone     String
+  dropoffZone    String
+  seatsRequested Int
+  fare           Int        // Stored in poysha (integer) to avoid float calculation issues
+  status         RideStatus @default(WAITING)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([status, pickupZone])
 }
