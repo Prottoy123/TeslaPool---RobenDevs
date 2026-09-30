@@ -1,6 +1,10 @@
 # Dhaka Tesla Pool ⚡
 > **"Share a seat. Split the fare. Survive Dhaka traffic."**
 
+### 🌐 Live Production Deployment
+- **Live Web Application:** [https://tesla-pool-roben-devs.vercel.app/](https://tesla-pool-roben-devs.vercel.app/)
+- **Live Backend API (Render):** [https://dhaka-tesla-backend.onrender.com/health](https://dhaka-tesla-backend.onrender.com/health)
+
 A production-grade ride-pooling backend and web interface engineered for Banani, Gulshan, and Mohakhali rush hours in Dhaka. Built around Jashim's 3-seat electric Tesla *Bullet*, handling real-time seat availability, route compatibility matching, concurrency locking, and integer poysha fare calculation.
 
 ---
@@ -387,3 +391,4 @@ In full compliance with **PRD Section 8 (AI Usage Policy)**:
 - [x] Automated test suite covering capacity, state machine, and concurrency (18/18 passing)
 - [x] Concurrency locking explanation & viral scale bonus writeup
 - [x] Self-explanatory documentation & AI usage disclosure
+- [x] Live Deployment: [https://tesla-pool-roben-devs.vercel.app/](https://tesla-pool-roben-devs.vercel.app/)
