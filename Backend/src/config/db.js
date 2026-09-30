@@ -5,10 +5,20 @@ import envConfig from "./env.config.js";
 
 const { Pool } = pg;
 
-function resolvePostgresUrl(url) {
+function resolvePostgresUrl(rawUrl) {
+  let url = rawUrl ? rawUrl.trim() : "";
   if (!url) {
     return "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
   }
+
+  // Clean any accidental prefix (e.g. teslapool_dbpostgresql:// -> postgresql://)
+  if (!url.startsWith("postgres://") && !url.startsWith("postgresql://") && !url.startsWith("prisma+postgres://")) {
+    const protoIdx = url.indexOf("postgres://") !== -1 ? url.indexOf("postgres://") : url.indexOf("postgresql://");
+    if (protoIdx !== -1) {
+      url = url.substring(protoIdx);
+    }
+  }
+
   if (url.startsWith("prisma+postgres://")) {
     try {
       const match = url.match(/api_key=([^&]+)/);
@@ -25,9 +35,16 @@ function resolvePostgresUrl(url) {
 }
 
 const connectionString = resolvePostgresUrl(envConfig.DATABASE_URL);
+const isRemote =
+  connectionString.includes(".render.com") ||
+  connectionString.includes(".neon.tech") ||
+  connectionString.includes(".supabase.co") ||
+  connectionString.includes("sslmode=require");
+
 const pool = new Pool({
   connectionString,
   max: 10,
+  ssl: isRemote ? { rejectUnauthorized: false } : undefined,
 });
 
 let stmtCounter = 0;
