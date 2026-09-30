@@ -110,6 +110,10 @@ const acceptRequest = asyncHandler(async (req, res) => {
 
   const vehicle = await getDriverVehicle(req.user);
 
+  if (vehicle.isOnline === false) {
+    throw new ApiError(400, "Driver is currently offline. Please set your vehicle online to accept rides.");
+  }
+
   // Execute inside an isolated transaction with Row-Level Lock
   const result = await prisma.$transaction(async (tx) => {
     // 1. Verify the ride request exists and is still WAITING
@@ -417,10 +421,101 @@ const updateVehicleStatus = asyncHandler(async (req, res) => {
   );
 });
 
+const getVehicle = asyncHandler(async (req, res) => {
+  const vehicle = await getDriverVehicle(req.user);
+  return res.status(200).json(
+    new ApiResponse(200, vehicle, "Driver vehicle retrieved successfully")
+  );
+});
+
+const getDriverRideHistory = asyncHandler(async (req, res) => {
+  const vehicle = await getDriverVehicle(req.user);
+
+  const pools = await prisma.pool.findMany({
+    where: {
+      vehicleId: vehicle.id,
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      requests: {
+        include: {
+          passenger: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  let totalEarningsInPoysha = 0;
+  let totalCompletedRides = 0;
+
+  const formattedHistory = pools.map((pool) => {
+    const poolEarningsInPoysha = pool.requests.reduce((sum, reqItem) => {
+      return reqItem.status === "COMPLETED" || reqItem.status === "IN_POOL" ? sum + reqItem.fare : sum;
+    }, 0);
+
+    if (pool.status === "COMPLETED") {
+      totalEarningsInPoysha += poolEarningsInPoysha;
+      totalCompletedRides += pool.requests.filter((r) => r.status === "COMPLETED").length;
+    }
+
+    return {
+      poolId: pool.id,
+      status: pool.status,
+      currentZone: pool.currentZone,
+      availableSeats: pool.availableSeats,
+      capacity: vehicle.capacity,
+      occupiedSeats: vehicle.capacity - pool.availableSeats,
+      createdAt: pool.createdAt,
+      updatedAt: pool.updatedAt,
+      passengers: pool.requests.map((r) => ({
+        rideId: r.id,
+        passengerName: r.passenger?.fullName,
+        passengerPhone: r.passenger?.phone,
+        pickupZone: r.pickupZone,
+        dropoffZone: r.dropoffZone,
+        seatsRequested: r.seatsRequested,
+        fareInPoysha: r.fare,
+        fareInBDT: Number((r.fare / 100).toFixed(2)),
+        status: r.status,
+      })),
+      poolEarningsInBDT: Number((poolEarningsInPoysha / 100).toFixed(2)),
+      poolEarningsInPoysha,
+    };
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        vehicle: {
+          licensePlate: vehicle.licensePlate,
+          capacity: vehicle.capacity,
+          isOnline: vehicle.isOnline,
+        },
+        totalCompletedPools: pools.filter((p) => p.status === "COMPLETED").length,
+        totalCompletedRides,
+        totalEarningsInBDT: Number((totalEarningsInPoysha / 100).toFixed(2)),
+        totalEarningsInPoysha,
+        history: formattedHistory,
+      },
+      "Driver ride and pool history retrieved successfully"
+    )
+  );
+});
+
 export {
   getPendingRequests,
   acceptRequest,
   updatePoolStatus,
   getActivePool,
   updateVehicleStatus,
+  getVehicle,
+  getDriverRideHistory,
 };
