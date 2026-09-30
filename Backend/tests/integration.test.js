@@ -270,3 +270,73 @@ test("7. Concurrency & Mutex Lock - Two concurrent requests cannot overbook capa
   await prisma.pool.delete({ where: { id: testPool.id } });
   await prisma.user.deleteMany({ where: { id: { in: [passengerA.id, passengerB.id] } } });
 });
+
+test("8. Driver & Vehicle - Online/Offline toggle blocks accepting rides when offline", async () => {
+  const driverLogin = await request("POST", "/api/auth/login", {
+    email: "jashim@teslapool.com",
+    password: "password123",
+  });
+  const driverToken = driverLogin.body.data.token;
+
+  // 1. Fetch vehicle info
+  const vehicleRes = await request("GET", "/api/driver/vehicle", null, driverToken);
+  assert.strictEqual(vehicleRes.status, 200);
+  assert.strictEqual(vehicleRes.body.data.capacity, 3);
+  assert.strictEqual(vehicleRes.body.data.licensePlate, "DHAKA-METRO-TE-1101");
+
+  // 2. Set driver vehicle offline
+  const offlineRes = await request(
+    "PATCH",
+    "/api/driver/vehicle/status",
+    { isOnline: false },
+    driverToken
+  );
+  assert.strictEqual(offlineRes.status, 200);
+  assert.strictEqual(offlineRes.body.data.isOnline, false);
+
+  // 3. Attempting to accept a ride while offline must fail (400)
+  const failAccept = await request(
+    "POST",
+    "/api/driver/pool/accept",
+    { rideRequestId: "dummy-id" },
+    driverToken
+  );
+  assert.strictEqual(failAccept.status, 400);
+  assert.ok(failAccept.body.message.includes("offline"));
+
+  // 4. Restore driver vehicle online
+  const onlineRes = await request(
+    "PATCH",
+    "/api/driver/vehicle/status",
+    { isOnline: true },
+    driverToken
+  );
+  assert.strictEqual(onlineRes.status, 200);
+  assert.strictEqual(onlineRes.body.data.isOnline, true);
+});
+
+test("9. Driver History - View pool history and aggregated earnings", async () => {
+  const driverLogin = await request("POST", "/api/auth/login", {
+    email: "jashim@teslapool.com",
+    password: "password123",
+  });
+  const driverToken = driverLogin.body.data.token;
+
+  const historyRes = await request("GET", "/api/driver/history", null, driverToken);
+  assert.strictEqual(historyRes.status, 200);
+  assert.ok(historyRes.body.data.vehicle);
+  assert.ok(Array.isArray(historyRes.body.data.history));
+  assert.strictEqual(typeof historyRes.body.data.totalEarningsInBDT, "number");
+});
+
+test("10. Passenger - Status endpoint exposes human-readable lifecycleStatus", async () => {
+  const passengerLogin = await request("POST", "/api/auth/login", {
+    email: "nusrat@teslapool.com",
+    password: "password123",
+  });
+  const passengerToken = passengerLogin.body.data.token;
+
+  const statusRes = await request("GET", "/api/passenger/ride/status", null, passengerToken);
+  assert.strictEqual(statusRes.status, 200);
+  assert.ok(statusRes.body.data.lifecycleStatus);
+});

@@ -144,40 +144,122 @@ const requestRide = asyncHandler(async (req, res) => {
  */
 const getRideStatus = asyncHandler(async (req, res) => {
   const passengerId = req.user.id;
+  const { rideId } = req.query;
 
-  const currentRide = await prisma.rideRequest.findFirst({
-    where: {
-      passengerId,
-      status: { in: ["WAITING", "IN_POOL"] },
-    },
-    orderBy: { createdAt: "desc" },
-    include: {
-      pool: {
-        select: {
-          id: true,
-          status: true,
-          currentZone: true,
-          vehicle: {
-            select: {
-              licensePlate: true,
-              capacity: true,
-              driver: {
-                select: {
-                  fullName: true,
-                  phone: true,
+  let currentRide;
+  if (rideId) {
+    currentRide = await prisma.rideRequest.findFirst({
+      where: {
+        id: rideId,
+        passengerId,
+      },
+      include: {
+        pool: {
+          select: {
+            id: true,
+            status: true,
+            currentZone: true,
+            vehicle: {
+              select: {
+                licensePlate: true,
+                capacity: true,
+                driver: {
+                  select: {
+                    fullName: true,
+                    phone: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    });
+  } else {
+    // Check for active ride first
+    currentRide = await prisma.rideRequest.findFirst({
+      where: {
+        passengerId,
+        status: { in: ["WAITING", "IN_POOL"] },
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        pool: {
+          select: {
+            id: true,
+            status: true,
+            currentZone: true,
+            vehicle: {
+              select: {
+                licensePlate: true,
+                capacity: true,
+                driver: {
+                  select: {
+                    fullName: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // If no active ride, get the most recent ride (e.g., recently completed or cancelled)
+    if (!currentRide) {
+      currentRide = await prisma.rideRequest.findFirst({
+        where: { passengerId },
+        orderBy: { createdAt: "desc" },
+        include: {
+          pool: {
+            select: {
+              id: true,
+              status: true,
+              currentZone: true,
+              vehicle: {
+                select: {
+                  licensePlate: true,
+                  capacity: true,
+                  driver: {
+                    select: {
+                      fullName: true,
+                      phone: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+  }
 
   if (!currentRide) {
     return res.status(200).json(
-      new ApiResponse(200, null, "No active ride in progress")
+      new ApiResponse(200, null, "No rides found for this account")
     );
+  }
+
+  // Derive human-friendly lifecycle status: waiting -> matched -> in progress -> completed/cancelled
+  let lifecycleStatus = currentRide.status;
+  if (currentRide.status === "WAITING") {
+    lifecycleStatus = "WAITING";
+  } else if (currentRide.status === "IN_POOL") {
+    if (currentRide.pool?.status === "MATCHED") {
+      lifecycleStatus = "MATCHED";
+    } else if (currentRide.pool?.status === "DRIVER_ARRIVED") {
+      lifecycleStatus = "DRIVER_ARRIVED";
+    } else if (currentRide.pool?.status === "STARTED") {
+      lifecycleStatus = "IN_PROGRESS";
+    } else if (currentRide.pool?.status === "COMPLETED") {
+      lifecycleStatus = "COMPLETED";
+    }
+  } else if (currentRide.status === "COMPLETED") {
+    lifecycleStatus = "COMPLETED";
+  } else if (currentRide.status === "CANCELLED") {
+    lifecycleStatus = "CANCELLED";
   }
 
   // Strict Identity Isolation: Exclude any other passengers' data or fares
@@ -189,6 +271,7 @@ const getRideStatus = asyncHandler(async (req, res) => {
     fareInPoysha: currentRide.fare,
     fareInBDT: Number((currentRide.fare / 100).toFixed(2)),
     status: currentRide.status,
+    lifecycleStatus,
     createdAt: currentRide.createdAt,
     poolStatus: currentRide.pool ? currentRide.pool.status : "SEARCHING_FOR_TESLA",
     driver: currentRide.pool?.vehicle?.driver
