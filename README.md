@@ -3,7 +3,6 @@
 
 ### 🌐 Live Production Deployment
 - **Live Web Application:** [https://tesla-pool-roben-devs.vercel.app/](https://tesla-pool-roben-devs.vercel.app/)
-- **Live Backend API (Render):** [https://dhaka-tesla-backend.onrender.com/health](https://dhaka-tesla-backend.onrender.com/health)
 
 A production-grade ride-pooling backend and web interface engineered for Banani, Gulshan, and Mohakhali rush hours in Dhaka. Built around Jashim's 3-seat electric Tesla *Bullet*, handling real-time seat availability, route compatibility matching, concurrency locking, and integer poysha fare calculation.
 
