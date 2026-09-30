@@ -242,10 +242,11 @@ const acceptRequest = asyncHandler(async (req, res) => {
 
 
 const updatePoolStatus = asyncHandler(async (req, res) => {
-  const { newStatus, poolId } = req.body;
+  const newStatus = req.body.newStatus || req.body.status;
+  const poolId = req.body.poolId;
 
   if (!newStatus) {
-    throw new ApiError(400, "newStatus is required");
+    throw new ApiError(400, "newStatus is required (e.g. DRIVER_ARRIVED, STARTED, COMPLETED)");
   }
 
   const vehicle = await getDriverVehicle(req.user);
